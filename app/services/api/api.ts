@@ -12,16 +12,12 @@ import {
 } from "apisauce"
 import Config from "../../config"
 import { GeneralApiProblem, getGeneralApiProblem } from "./apiProblem" // @demo remove-current-line
-import type {
-  ApiConfig,
-  ApiFeedResponse, // @demo remove-current-line
-} from "./api.types"
-import type { EpisodeSnapshotIn } from "../../models/Episode" // @demo remove-current-line
+import { PostTypeSnapshotIn } from "app/models/Post"
 
 /**
  * Configuring the apisauce instance.
  */
-export const DEFAULT_API_CONFIG: ApiConfig = {
+export const DEFAULT_API_CONFIG = {
   url: Config.API_URL,
   timeout: 10000,
 }
@@ -32,56 +28,47 @@ export const DEFAULT_API_CONFIG: ApiConfig = {
  */
 export class Api {
   apisauce: ApisauceInstance
-  config: ApiConfig
+  config: typeof DEFAULT_API_CONFIG
 
   /**
    * Set up our API instance. Keep this lightweight!
    */
-  constructor(config: ApiConfig = DEFAULT_API_CONFIG) {
+  constructor(config = DEFAULT_API_CONFIG) {
     this.config = config
     this.apisauce = create({
       baseURL: this.config.url,
       timeout: this.config.timeout,
       headers: {
         Accept: "application/json",
+        ["x-api-key"]: "thisisapikey",
       },
     })
   }
 
-  // @demo remove-block-start
-  /**
-   * Gets a list of recent React Native Radio episodes.
-   */
-  async getEpisodes(): Promise<{ kind: "ok"; episodes: EpisodeSnapshotIn[] } | GeneralApiProblem> {
+  async getPosts(): Promise<{ posts: PostTypeSnapshotIn[] } | GeneralApiProblem> {
     // make the api call
-    const response: ApiResponse<ApiFeedResponse> = await this.apisauce.get(
-      `api.json?rss_url=https%3A%2F%2Ffeeds.simplecast.com%2FhEI_f9Dx`,
-    )
+    const response = await this.apisauce.get(`posts`)
 
     // the typical ways to die when calling an api
     if (!response.ok) {
       const problem = getGeneralApiProblem(response)
-      if (problem) return problem
+      throw new Error(problem.kind || "error")
     }
 
-    // transform the data into the format we are expecting
-    try {
-      const rawData = response.data
-
-      // This is where we transform the data into the shape we expect for our MST model.
-      const episodes: EpisodeSnapshotIn[] = rawData.items.map((raw) => ({
-        ...raw,
-      }))
-
-      return { kind: "ok", episodes }
-    } catch (e) {
-      if (__DEV__) {
-        console.tron.error(`Bad data: ${e.message}\n${response.data}`, e.stack)
-      }
-      return { kind: "bad-data" }
-    }
+    return response.data
   }
-  // @demo remove-block-end
+
+  async removePost(id: string): Promise<unknown> {
+    const response = await this.apisauce.delete(`posts/${id}`)
+
+    // the typical ways to die when calling an api
+    if (!response.ok) {
+      const problem = getGeneralApiProblem(response)
+      throw new Error(problem.kind || "error")
+    }
+
+    return response.data
+  }
 }
 
 // Singleton instance of the API for convenience
